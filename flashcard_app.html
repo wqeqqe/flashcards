@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VocabFlip - 智能單字閃卡系統</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS (xlsx) for reading/writing Excel files -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Phosphor Icons for UI icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Canvas Confetti for completion celebration -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- Google Font: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Noto Sans TC', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* 3D Card Flip Mechanism */
+    .perspective-1000 {
+      perspective: 1000px;
+    }
+    .transform-style-3d {
+      transform-style: preserve-3d;
+    }
+    .backface-hidden {
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .rotate-y-180 {
+      transform: rotateY(180deg);
+    }
+    
+    /* Smooth custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.4);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(156, 163, 175, 0.7);
+    }
+  </style>
+</head>
+
+<body class="h-full bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200 antialiased flex flex-col font-sans select-none">
+
+  <header class="w-full border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-30 transition-colors">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <!-- App Brand Logo -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+          <i class="ph-bold ph-cards text-2xl"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+            VocabFlip
+            <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950/80 dark:text-indigo-300 font-medium">Excel 記憶卡</span>
+          </h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">無重複隨機閃卡與多標籤題庫複習系統</p>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button id="btnOpenUpload" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition">
+          <i class="ph ph-file-arrow-up text-base"></i>
+          <span>更換/匯入檔案</span>
+        </button>
+
+        <button id="btnDownloadTemplate" title="下載範例 Excel 格式檔" class="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-700 transition" aria-label="下載範例檔">
+          <i class="ph ph-download-simple text-base"></i>
+        </button>
+
+        <button id="themeToggle" class="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-700 transition" aria-label="切換深淺模式">
+          <i id="themeIcon" class="ph ph-moon text-base"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 flex flex-col items-center justify-center">
+
+    <!-- VIEW 1: Study Mode Container -->
+    <div id="studyView" class="w-full max-w-3xl flex flex-col items-center">
+      
+      <!-- Top Filters & Section Bar -->
+      <div class="w-full mb-5 bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm transition-all">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-700/60">
+          <div class="flex items-center gap-2">
+            <i class="ph ph-tag text-indigo-500 font-bold"></i>
+            <span class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200">選擇學習章節 / 標籤類別:</span>
+            <span id="activeCountBadge" class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium">0 個字</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <button id="btnSelectAllTags" class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">全選</button>
+            <span class="text-slate-300 dark:text-slate-600">|</span>
+            <button id="btnDeselectAllTags" class="text-slate-500 dark:text-slate-400 hover:underline">取消全選</button>
+          </div>
+        </div>
+
+        <!-- Dynamic Label Filter Pills -->
+        <div id="tagFiltersContainer" class="flex flex-wrap gap-1.5 sm:gap-2 pt-3 max-h-24 overflow-y-auto">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+
+      <!-- Stats and Controls Top Bar -->
+      <div class="w-full flex items-center justify-between mb-3 px-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+        <div class="flex items-center gap-3">
+          <span class="font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+            <i class="ph ph-stack text-indigo-500"></i>
+            卡片進度: <span id="progressText" class="font-bold text-slate-900 dark:text-white">0 / 0</span>
+          </span>
+          <span class="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+            <i class="ph-bold ph-check-circle"></i> 已掌握: <span id="masteredCount" class="font-bold">0</span>
+          </span>
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <button id="btnReshuffle" class="px-2.5 py-1 text-xs rounded-lg bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-700/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition flex items-center gap-1" title="以亂數隨機重新洗牌 (快速鍵 R)">
+            <i class="ph ph-shuffle"></i> 重新隨機
+          </button>
+        </div>
+      </div>
+
+      <!-- Progress Bar Track -->
+      <div class="w-full bg-slate-200 dark:bg-slate-700/60 rounded-full h-2 mb-5 overflow-hidden shadow-inner">
+        <div id="progressBar" class="bg-indigo-600 h-full rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+      </div>
+
+      <div class="w-full perspective-1000 min-h-[380px] sm:min-h-[420px] relative cursor-pointer group" id="flashcardArea" tabindex="0" role="button" aria-label="點擊翻面閃卡">
+        
+        <div id="cardInner" class="w-full h-full min-h-[380px] sm:min-h-[420px] rounded-3xl bg-transparent transition-transform duration-500 transform-style-3d relative shadow-lg">
+          
+          <!-- Front Face (Word, POS, Pronunciation, Label) -->
+          <div class="absolute inset-0 w-full h-full bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700/80 p-6 sm:p-8 flex flex-col justify-between backface-hidden shadow-xl shadow-slate-200/50 dark:shadow-none hover:border-indigo-400/60 dark:hover:border-indigo-500/50 transition-colors">
+            <!-- Card Front Header -->
+            <div class="flex items-start justify-between">
+              <span id="cardFrontTag" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800/50">
+                標籤
+              </span>
+              <span class="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                <i class="ph ph-cursor-click"></i> 點擊或按空白鍵翻面
+              </span>
+            </div>
+
+            <!-- Card Front Center (Word + Phonetic + Audio) -->
+            <div class="text-center my-auto py-4">
+              <div class="flex items-center justify-center gap-3">
+                <h2 id="cardWord" class="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  Word
+                </h2>
+                <!-- Pronounce Button -->
+                <button id="btnPronounce" class="p-2.5 rounded-full text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition active:scale-95 shadow-sm" title="朗讀發音">
+                  <i class="ph-bold ph-speaker-high text-xl sm:text-2xl"></i>
+                </button>
+              </div>
+
+              <!-- Phonetic & POS -->
+              <div class="mt-3 flex items-center justify-center gap-2">
+                <span id="cardPhonetic" class="text-sm sm:text-base font-medium text-slate-500 dark:text-slate-400 font-mono">
+                  [fəˈnetɪk]
+                </span>
+                <span id="cardPos" class="text-xs px-2 py-0.5 rounded-md font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 italic">
+                  n.
+                </span>
+              </div>
+            </div>
+
+            <!-- Card Front Footer Tip -->
+            <div class="text-center pt-2">
+              <span class="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 font-medium">
+                <i class="ph ph-arrows-clockwise"></i> 翻至背面查看中文解釋與例句
+              </span>
+            </div>
+          </div>
+
+          <!-- Back Face (Definition, Example, Notes) -->
+          <div class="absolute inset-0 w-full h-full bg-slate-900 dark:bg-slate-950 text-white rounded-3xl border border-slate-700 p-6 sm:p-8 flex flex-col justify-between backface-hidden rotate-y-180 shadow-2xl">
+            <!-- Card Back Header -->
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-2">
+                <span id="cardBackWord" class="text-base font-bold text-indigo-300">Word</span>
+                <span id="cardBackPos" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 italic">n.</span>
+              </div>
+              <span class="text-xs text-slate-400 flex items-center gap-1">
+                <i class="ph ph-arrow-u-down-left"></i> 再點擊翻回正面
+              </span>
+            </div>
+
+            <!-- Card Back Content -->
+            <div class="my-auto py-2 space-y-4">
+              <!-- Definition -->
+              <div>
+                <p class="text-xs font-bold tracking-wide uppercase text-indigo-400 mb-1">釋義 (Definition)</p>
+                <p id="cardDefinition" class="text-xl sm:text-2xl font-bold text-white leading-snug">
+                  中文釋義內容
+                </p>
+              </div>
+
+              <!-- Example Sentence -->
+              <div id="cardExampleContainer" class="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/60">
+                <p class="text-xs font-semibold text-slate-400 mb-1 flex items-center gap-1">
+                  <i class="ph ph-quotes"></i> 例句 (Example)
+                </p>
+                <p id="cardExample" class="text-sm sm:text-base text-slate-200 italic leading-relaxed">
+                  "This is an example sentence for the word."
+                </p>
+                <p id="cardExampleTrans" class="text-xs sm:text-sm text-slate-400 mt-1">
+                  這是一個例句翻譯。
+                </p>
+              </div>
+
+              <!-- Extra Notes if any -->
+              <div id="cardNotesContainer" class="text-xs text-amber-300/90 flex items-start gap-1">
+                <i class="ph ph-info flex-shrink-0 mt-0.5"></i>
+                <span id="cardNotes">補充筆記內容</span>
+              </div>
+            </div>
+
+            <!-- Card Back Footer -->
+            <div class="text-center text-xs text-slate-500">
+              VocabFlip Flashcard System
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="w-full mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <button id="btnPrev" class="px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-semibold text-sm transition flex items-center justify-center gap-2 shadow-sm active:scale-95 disabled:opacity-40 disabled:pointer-events-none">
+          <i class="ph-bold ph-arrow-left"></i> 上一張
+        </button>
+
+        <button id="btnFlip" class="px-4 py-3 rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold text-sm transition flex items-center justify-center gap-2 shadow-sm active:scale-95">
+          <i class="ph-bold ph-arrows-clockwise"></i> 翻面 (空白鍵)
+        </button>
+
+        <button id="btnMarkMastered" class="px-4 py-3 rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 font-semibold text-sm transition flex items-center justify-center gap-2 shadow-sm active:scale-95">
+          <i class="ph-bold ph-check"></i> 標記已熟記
+        </button>
+
+        <button id="btnNext" class="px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 active:scale-95">
+          <span>下一張</span> <i class="ph-bold ph-arrow-right"></i>
+        </button>
+      </div>
+
+      <!-- Keyboard Shortcuts Hints -->
+      <div class="mt-4 flex flex-wrap items-center justify-center gap-3 text-[11px] sm:text-xs text-slate-400 dark:text-slate-500">
+        <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">Space</kbd> 翻轉</span>
+        <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">→</kbd> 或 <kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">J</kbd> 下一張</span>
+        <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">←</kbd> 或 <kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">K</kbd> 上一張</span>
+        <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">M</kbd> 熟記</span>
+        <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">P</kbd> 發音</span>
+      </div>
+    </div>
+
+    <div id="completionView" class="w-full max-w-xl bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-700 shadow-2xl text-center hidden transition-all">
+      <div class="w-20 h-20 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-4xl mb-5 shadow-inner">
+        <i class="ph-fill ph-trophy"></i>
+      </div>
+
+      <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">太棒了！所有單字已全部複習完畢 🎉</h2>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">已完成本輪設定的所有隨機單字卡，快來回顧本次學習成果：</p>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-3 gap-3 my-6">
+        <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
+          <p class="text-xs text-slate-400">複習總數</p>
+          <p id="statTotal" class="text-xl sm:text-2xl font-black text-slate-800 dark:text-white mt-1">0</p>
+        </div>
+        <div class="bg-emerald-50/80 dark:bg-emerald-950/30 p-4 rounded-2xl border border-emerald-200/50 dark:border-emerald-800/40">
+          <p class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">已熟記單字</p>
+          <p id="statMastered" class="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">0</p>
+        </div>
+        <div class="bg-indigo-50/80 dark:bg-indigo-950/30 p-4 rounded-2xl border border-indigo-200/50 dark:border-indigo-800/40">
+          <p class="text-xs text-indigo-600 dark:text-indigo-400 font-medium">熟記達成率</p>
+          <p id="statRate" class="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">0%</p>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex flex-col sm:flex-row gap-3">
+        <button id="btnRestartAll" class="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2">
+          <i class="ph-bold ph-arrows-counter-clockwise"></i> 重新隨機洗牌
+        </button>
+        <button id="btnReviewUnmastered" class="flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
+          <i class="ph-bold ph-bookmarks"></i> 僅複習未熟記單字
+        </button>
+      </div>
+
+      <div class="mt-4">
+        <button id="btnChangeSettings" class="text-xs text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 underline font-medium">
+          變更單字類別或更換 Excel 檔案
+        </button>
+      </div>
+    </div>
+
+    <!-- Empty State View (When no tags selected) -->
+    <div id="emptyView" class="w-full max-w-md bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-200 dark:border-slate-700 text-center hidden">
+      <div class="w-16 h-16 mx-auto rounded-full bg-indigo-50 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-3xl mb-4">
+        <i class="ph ph-funnel"></i>
+      </div>
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white">未選取任何標籤或單字</h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 mb-6">請在上方勾選至少一個標籤或工作表區段，以開始進行閃卡記憶練習。</p>
+      <button id="btnEmptySelectAll" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition">
+        全選所有標籤
+      </button>
+    </div>
+  </main>
+
+  <div id="uploadModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="w-full max-w-lg bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700 shadow-2xl transform scale-95 transition-transform duration-200 max-h-[90vh] overflow-y-auto">
+      
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+            <i class="ph-bold ph-microsoft-excel-logo text-lg"></i>
+          </div>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-white">匯入 Excel 單字本</h3>
+        </div>
+        <button id="btnCloseModal" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+          <i class="ph-bold ph-x text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Drag and Drop Dropzone -->
+      <div class="mt-5">
+        <label for="excelFileInput" id="dropzone" class="border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition bg-slate-50/50 dark:bg-slate-900/40 group">
+          <div class="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform mb-3">
+            <i class="ph ph-upload-simple"></i>
+          </div>
+          <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">點擊選擇檔案 或 拖曳至此處</span>
+          <span class="text-xs text-slate-400 dark:text-slate-500 mt-1">支援 .xlsx, .xls, .csv 檔案格式</span>
+          <input id="excelFileInput" type="file" accept=".xlsx, .xls, .csv" class="hidden">
+        </label>
+      </div>
+
+      <!-- Sheet selector if multiple sheets exist -->
+      <div id="sheetSelectContainer" class="mt-4 hidden">
+        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">選取要載入的 Excel 工作表 (Sheet)：</label>
+        <select id="sheetSelector" class="w-full text-xs sm:text-sm bg-slate-100 dark:bg-slate-700 border-none rounded-xl p-2.5 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500">
+          <!-- Populated if multi-sheets -->
+        </select>
+      </div>
+
+      <!-- Column mapping inspector / feedback -->
+      <div class="mt-5 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 text-xs">
+        <h4 class="font-bold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-1.5">
+          <i class="ph ph-magic-wand text-indigo-500 font-bold"></i> 欄位自動智慧對照規則：
+        </h4>
+        <ul class="text-slate-500 dark:text-slate-400 space-y-1 pl-4 list-disc">
+          <li><strong>英文單字:</strong> Word, Vocabulary, Term, 單字</li>
+          <li><strong>中文釋義:</strong> Definition, Meaning, Chinese, 意思, 釋義</li>
+          <li><strong>音標:</strong> Phonetic, KK, 音標, Pronunciation</li>
+          <li><strong>詞性:</strong> POS, Part of Speech, 詞性</li>
+          <li><strong>例句:</strong> Example, Sentence, 例句</li>
+          <li><strong>分類標籤:</strong> Label, Tag, Category, Section, 標籤, 章節</li>
+        </ul>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="mt-6 flex items-center justify-between gap-3">
+        <button id="btnLoadDemo" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold flex items-center gap-1">
+          <i class="ph ph-sparkle"></i> 載入內建高頻單字範例庫
+        </button>
+        <button id="btnConfirmUpload" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs sm:text-sm transition">
+          完成設定並開始
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 text-xs sm:text-sm font-medium">
+    <i id="toastIcon" class="ph-bold ph-info text-indigo-400"></i>
+    <span id="toastMsg">提示訊息</span>
+  </div>
+
+  <script>
+    // Built-in high-quality demo vocabulary dataset with multiple categories/labels
+    const DEMO_VOCABULARY = [
+      {
+        word: "serendipity",
+        phonetic: "/ˌser.ənˈdɪp.ə.t̬i/",
+        pos: "n.",
+        definition: "意外發現美好事物的機緣；意外收穫",
+        example: "Finding my dream job while on vacation was pure serendipity.",
+        exampleTrans: "在度假時找到夢想工作純屬偶然的驚喜機緣。",
+        notes: "托福 / 雅思常見優雅名詞",
+        label: "生活美語"
+      },
+      {
+        word: "ubiquitous",
+        phonetic: "/juːˈbɪk.wə.t̬əs/",
+        pos: "adj.",
+        definition: "無處不在的；普遍存在的",
+        example: "Smartphones have become ubiquitous in daily modern society.",
+        exampleTrans: "智慧型手機在現代日常社會中已變得無所不在。",
+        notes: "同義詞: omnipresent, pervasive",
+        label: "學術進階"
+      },
+      {
+        word: "resilience",
+        phonetic: "/rɪˈzɪl.jəns/",
+        pos: "n.",
+        definition: "恢復力；彈性；挫折復原力",
+        example: "The team showed great resilience after the severe setback.",
+        exampleTrans: "團隊在經歷重大挫折後展現出極強的復原能力。",
+        notes: "商務管理與心理學必備",
+        label: "職場商務"
+      },
+      {
+        word: "ephemeral",
+        phonetic: "/ɪˈfem.ər.əl/",
+        pos: "adj.",
+        definition: "短暫的；瞬息即逝的；朝生暮死的",
+        example: "Fashions are ephemeral, but true personal style lasts forever.",
+        exampleTrans: "時尚潮流轉瞬即逝，但真正的個人風格歷久彌新。",
+        notes: "GRE / 寫作高頻詞彙",
+        label: "學術進階"
+      },
+      {
+        word: "streamline",
+        phonetic: "/ˈstriːm.laɪn/",
+        pos: "v.",
+        definition: "使簡化；簡化流程；精簡架構",
+        example: "We need to streamline our workflow to increase overall productivity.",
+        exampleTrans: "我們需要簡化工作流程以提升整體生產力。",
+        notes: "職場多益高頻",
+        label: "職場商務"
+      },
+      {
+        word: "ambiguity",
+        phonetic: "/ˌæm.bɪˈɡjuː.ə.t̬i/",
+        pos: "n.",
+        definition: "模稜兩可；不明確；歧義",
+        example: "There was no ambiguity in what the contract stated.",
+        exampleTrans: "合約所陳述的內容完全沒有任何歧義。",
+        notes: "寫作與法律合同常見",
+        label: "職場商務"
+      },
+      {
+        word: "mellifluous",
+        phonetic: "/meˈlɪf.lu.əs/",
+        pos: "adj.",
+        definition: "悅耳柔和的；甜美流暢的 (聲音)",
+        example: "She was captivated by the voice actor's mellifluous tone.",
+        exampleTrans: "她被那位配音員悅耳柔和的嗓音深深吸引。",
+        notes: "文學與雅思修辭",
+        label: "生活美語"
+      },
+      {
+        word: "pragmatic",
+        phonetic: "/præɡˈmæt̬.ɪk/",
+        pos: "adj.",
+        definition: "務實的；重實效的",
+        example: "We need to take a pragmatic approach to resolve this technical challenge.",
+        exampleTrans: "我們需要採取務實的做法來解決這個技術難題。",
+        notes: "同義詞: practical, realistic",
+        label: "學術進階"
+      }
+    ];
+
+    let allVocabularyData = [];          // Complete master list from current file/demo
+    let availableLabels = [];             // Unique list of sections/labels
+    let selectedLabels = new Set();       // Active labels chosen by user
+    let currentDeck = [];                 // Filtered and shuffled cards for the session
+    let currentIndex = 0;                 // Current card pointer
+    let isFlipped = false;                // 3D card flip status
+    let masteredWords = new Set();        // Set of words marked as mastered in current session
+    let rawWorkbook = null;               // Stored for multi-sheet switches
+    
+    // UI References
+    const flashcardArea = document.getElementById('flashcardArea');
+    const cardInner = document.getElementById('cardInner');
+    const cardWord = document.getElementById('cardWord');
+    const cardPhonetic = document.getElementById('cardPhonetic');
+    const cardPos = document.getElementById('cardPos');
+    const cardFrontTag = document.getElementById('cardFrontTag');
+    const cardBackWord = document.getElementById('cardBackWord');
+    const cardBackPos = document.getElementById('cardBackPos');
+    const cardDefinition = document.getElementById('cardDefinition');
+    const cardExample = document.getElementById('cardExample');
+    const cardExampleTrans = document.getElementById('cardExampleTrans');
+    const cardNotes = document.getElementById('cardNotes');
+    const cardNotesContainer = document.getElementById('cardNotesContainer');
+    
+    const progressText = document.getElementById('progressText');
+    const progressBar = document.getElementById('progressBar');
+    const masteredCountElem = document.getElementById('masteredCount');
+    const tagFiltersContainer = document.getElementById('tagFiltersContainer');
+    const activeCountBadge = document.getElementById('activeCountBadge');
+
+    const studyView = document.getElementById('studyView');
+    const completionView = document.getElementById('completionView');
+    const emptyView = document.getElementById('emptyView');
+
+    const uploadModal = document.getElementById('uploadModal');
+    const excelFileInput = document.getElementById('excelFileInput');
+    const dropzone = document.getElementById('dropzone');
+    const sheetSelector = document.getElementById('sheetSelector');
+    const sheetSelectContainer = document.getElementById('sheetSelectContainer');
+
+    /**
+     * Fisher-Yates (Knuth) Non-repeating Shuffle
+     * Guarantees every permutation is equally likely with O(N) complexity
+     */
+    function shuffleArray(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    /**
+     * Smart Header Normalizer: Matches multiple common aliases for columns
+     */
+    function findColumnKey(row, aliases) {
+      const keys = Object.keys(row);
+      for (const alias of aliases) {
+        const found = keys.find(k => k.trim().toLowerCase() === alias.toLowerCase());
+        if (found) return found;
+      }
+      // Partial match fallback
+      for (const alias of aliases) {
+        const found = keys.find(k => k.trim().toLowerCase().includes(alias.toLowerCase()));
+        if (found) return found;
+      }
+      return null;
+    }
+
+    function parseExcelRows(rawRows, sheetName = "") {
+      if (!rawRows || rawRows.length === 0) return [];
+      
+      const sample = rawRows[0];
+      const wordKey = findColumnKey(sample, ["word", "vocabulary", "term", "單字", "英文", "words"]);
+      const defKey = findColumnKey(sample, ["definition", "meaning", "chinese", "釋義", "解釋", "意思", "中文"]);
+      const phoneticKey = findColumnKey(sample, ["phonetic", "kk", "音標", "pronunciation", "ipa"]);
+      const posKey = findColumnKey(sample, ["pos", "part of speech", "詞性", "type"]);
+      const exampleKey = findColumnKey(sample, ["example", "sentence", "例句", "sentences"]);
+      const exTransKey = findColumnKey(sample, ["exampletrans", "translation", "例句翻譯", "例句中文", "trans"]);
+      const notesKey = findColumnKey(sample, ["notes", "note", "備註", "筆記", "remark"]);
+      const labelKey = findColumnKey(sample, ["label", "tag", "category", "section", "標籤", "分類", "章節", "組別"]);
+
+      const parsed = [];
+
+      rawRows.forEach((row, idx) => {
+        const wordVal = wordKey && row[wordKey] ? String(row[wordKey]).trim() : "";
+        if (!wordVal) return; // Skip blank words
+
+        const defVal = defKey && row[defKey] ? String(row[defKey]).trim() : "（無提供中文釋義）";
+        const phoneticVal = phoneticKey && row[phoneticKey] ? String(row[phoneticKey]).trim() : "";
+        const posVal = posKey && row[posKey] ? String(row[posKey]).trim() : "";
+        const exampleVal = exampleKey && row[exampleKey] ? String(row[exampleKey]).trim() : "";
+        const exTransVal = exTransKey && row[exTransKey] ? String(row[exTransKey]).trim() : "";
+        const notesVal = notesKey && row[notesKey] ? String(row[notesKey]).trim() : "";
+        
+        // Priority: specific Label column > current Excel Sheet name > Default "一般單字"
+        let labelVal = labelKey && row[labelKey] ? String(row[labelKey]).trim() : "";
+        if (!labelVal) {
+          labelVal = sheetName || "預設分組";
+        }
+
+        parsed.push({
+          id: idx + 1,
+          word: wordVal,
+          definition: defVal,
+          phonetic: phoneticVal,
+          pos: posVal,
+          example: exampleVal,
+          exampleTrans: exTransVal,
+          notes: notesVal,
+          label: labelVal
+        });
+      });
+
+      return parsed;
+    }
+
+    function speakCurrentWord() {
+      if (currentDeck.length === 0 || !currentDeck[currentIndex]) return;
+      const word = currentDeck[currentIndex].word;
+      if (!('speechSynthesis' in window)) {
+        showToast("您的瀏覽器不支援語音合成功能", "ph-warning");
+        return;
+      }
+      
+      window.speechSynthesis.cancel(); // Stop any pending utterances
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.9; // natural teaching pace
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function updateCardView() {
+      if (currentDeck.length === 0) {
+        studyView.classList.add('hidden');
+        completionView.classList.add('hidden');
+        emptyView.classList.remove('hidden');
+        return;
+      }
+
+      studyView.classList.remove('hidden');
+      completionView.classList.add('hidden');
+      emptyView.classList.add('hidden');
+
+      const card = currentDeck[currentIndex];
+
+      // Reset flip to front whenever showing new card
+      if (isFlipped) {
+        flipCard(false);
+      }
+
+      // Populate Front Side
+      cardWord.textContent = card.word;
+      cardPhonetic.textContent = card.phonetic || "";
+      cardPhonetic.style.display = card.phonetic ? "inline-block" : "none";
+      cardPos.textContent = card.pos || "";
+      cardPos.style.display = card.pos ? "inline-block" : "none";
+      cardFrontTag.textContent = card.label || "一般";
+
+      // Populate Back Side
+      cardBackWord.textContent = card.word;
+      cardBackPos.textContent = card.pos || "";
+      cardBackPos.style.display = card.pos ? "inline-block" : "none";
+      cardDefinition.textContent = card.definition;
+      
+      // Example section visibility
+      const exContainer = document.getElementById('cardExampleContainer');
+      if (card.example) {
+        exContainer.classList.remove('hidden');
+        cardExample.textContent = `"${card.example}"`;
+        cardExampleTrans.textContent = card.exampleTrans || "";
+        cardExampleTrans.style.display = card.exampleTrans ? "block" : "none";
+      } else {
+        exContainer.classList.add('hidden');
+      }
+
+      // Notes section visibility
+      if (card.notes) {
+        cardNotesContainer.classList.remove('hidden');
+        cardNotes.textContent = card.notes;
+      } else {
+        cardNotesContainer.classList.add('hidden');
+      }
+
+      // Progress & Mastered indicators
+      const currentNumber = currentIndex + 1;
+      const total = currentDeck.length;
+      progressText.textContent = `${currentNumber} / ${total}`;
+      const percentage = Math.round((currentNumber / total) * 100);
+      progressBar.style.width = `${percentage}%`;
+      masteredCountElem.textContent = masteredWords.size;
+
+      // Update button state for mastered button
+      const btnMastered = document.getElementById('btnMarkMastered');
+      if (masteredWords.has(card.word)) {
+        btnMastered.innerHTML = `<i class="ph-fill ph-check-circle text-emerald-600"></i> 已熟記`;
+        btnMastered.classList.add('ring-2', 'ring-emerald-400');
+      } else {
+        btnMastered.innerHTML = `<i class="ph-bold ph-check"></i> 標記已熟記`;
+        btnMastered.classList.remove('ring-2', 'ring-emerald-400');
+      }
+
+      // Prev Button disabled on start
+      document.getElementById('btnPrev').disabled = (currentIndex === 0);
+    }
+
+    function flipCard(forceState = null) {
+      if (forceState !== null) {
+        isFlipped = forceState;
+      } else {
+        isFlipped = !isFlipped;
+      }
+
+      if (isFlipped) {
+        cardInner.classList.add('rotate-y-180');
+      } else {
+        cardInner.classList.remove('rotate-y-180');
+      }
+    }
+
+    function nextCard() {
+      if (currentIndex < currentDeck.length - 1) {
+        currentIndex++;
+        updateCardView();
+      } else {
+        // All cards finished! Trigger completion view & confetti
+        showCompletionScreen();
+      }
+    }
+
+    function prevCard() {
+      if (currentIndex > 0) {
+        currentIndex--;
+        updateCardView();
+      }
+    }
+
+    function toggleMasteredCurrent() {
+      if (currentDeck.length === 0 || !currentDeck[currentIndex]) return;
+      const currentWord = currentDeck[currentIndex].word;
+      if (masteredWords.has(currentWord)) {
+        masteredWords.delete(currentWord);
+        showToast(`已取消熟記: ${currentWord}`, "ph-minus-circle");
+      } else {
+        masteredWords.add(currentWord);
+        showToast(`已標記為熟記: ${currentWord}`, "ph-check-circle");
+      }
+      updateCardView();
+    }
+
+    function showCompletionScreen() {
+      studyView.classList.add('hidden');
+      emptyView.classList.add('hidden');
+      completionView.classList.remove('hidden');
+
+      const total = currentDeck.length;
+      const mastered = currentDeck.filter(c => masteredWords.has(c.word)).length;
+      const rate = total > 0 ? Math.round((mastered / total) * 100) : 0;
+
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statMastered').textContent = mastered;
+      document.getElementById('statRate').textContent = `${rate}%`;
+
+      // Trigger Confetti Celebration Animation
+      if (typeof confetti === 'function') {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      }
+    }
+
+    function filterAndReshuffleDeck(keepMastered = true) {
+      if (!keepMastered) {
+        masteredWords.clear();
+      }
+
+      // Filter by selected labels
+      const filtered = allVocabularyData.filter(item => selectedLabels.has(item.label));
+
+      // Fisher-Yates random shuffle without repetition
+      currentDeck = shuffleArray(filtered);
+      currentIndex = 0;
+
+      activeCountBadge.textContent = `${filtered.length} 個字`;
+
+      updateCardView();
+    }
+
+    function renderLabelFilterPills() {
+      tagFiltersContainer.innerHTML = '';
+      
+      // Calculate count per label
+      const counts = {};
+      allVocabularyData.forEach(item => {
+        counts[item.label] = (counts[item.label] || 0) + 1;
+      });
+
+      availableLabels.forEach(label => {
+        const isSelected = selectedLabels.has(label);
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = `px-3 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 border ${
+          isSelected 
+            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+        }`;
+        
+        pill.innerHTML = `
+          <span>${escapeHtml(label)}</span>
+          <span class="text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}">${counts[label] || 0}</span>
+        `;
+
+        pill.addEventListener('click', () => {
+          if (selectedLabels.has(label)) {
+            selectedLabels.delete(label);
+          } else {
+            selectedLabels.add(label);
+          }
+          renderLabelFilterPills();
+          filterAndReshuffleDeck();
+        });
+
+        tagFiltersContainer.appendChild(pill);
+      });
+    }
+
+    function initializeVocabularySet(vocabularyList) {
+      allVocabularyData = vocabularyList;
+      
+      // Extract unique labels
+      const uniqueLabels = Array.from(new Set(vocabularyList.map(v => v.label || "一般")));
+      availableLabels = uniqueLabels;
+      selectedLabels = new Set(uniqueLabels); // default select all
+
+      renderLabelFilterPills();
+      filterAndReshuffleDeck(false);
+    }
+
+    function handleFile(file) {
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          rawWorkbook = workbook;
+
+          if (workbook.SheetNames.length === 0) {
+            showToast("Excel 檔案內無有效工作表", "ph-warning");
+            return;
+          }
+
+          // Setup Sheet selector dropdown if workbook has multiple sheets
+          sheetSelector.innerHTML = '';
+          if (workbook.SheetNames.length > 1) {
+            workbook.SheetNames.forEach((name, idx) => {
+              const opt = document.createElement('option');
+              opt.value = name;
+              opt.textContent = `${name} (工作表 ${idx + 1})`;
+              sheetSelector.appendChild(opt);
+            });
+            sheetSelectContainer.classList.remove('hidden');
+          } else {
+            sheetSelectContainer.classList.add('hidden');
+          }
+
+          loadSheet(workbook.SheetNames[0]);
+          closeModal();
+          showToast(`成功載入檔案: ${file.name}`, "ph-check-circle");
+        } catch (err) {
+          console.error(err);
+          showToast("解析 Excel 檔案失敗，請確認檔案格式", "ph-warning");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function loadSheet(sheetName) {
+      if (!rawWorkbook || !rawWorkbook.Sheets[sheetName]) return;
+      const worksheet = rawWorkbook.Sheets[sheetName];
+      const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+      
+      if (jsonRows.length === 0) {
+        showToast(`工作表 "${sheetName}" 內沒有資料`, "ph-warning");
+        return;
+      }
+
+      const parsed = parseExcelRows(jsonRows, sheetName);
+      if (parsed.length === 0) {
+        showToast("未能解析出單字資料，請檢查欄位標題", "ph-warning");
+        return;
+      }
+
+      initializeVocabularySet(parsed);
+    }
+
+    function downloadSampleExcel() {
+      const sampleData = [
+        {
+          "Word": "serendipity",
+          "Phonetic": "/ˌser.ənˈdɪp.ə.t̬i/",
+          "POS": "n.",
+          "Definition": "意外發現美好事物的機緣；意外收穫",
+          "Example": "Finding my dream job while on vacation was pure serendipity.",
+          "ExampleTrans": "在度假時找到夢想工作純屬偶然的驚喜機緣。",
+          "Notes": "托福 / 雅思常見優雅名詞",
+          "Label": "生活美語"
+        },
+        {
+          "Word": "ubiquitous",
+          "Phonetic": "/juːˈbɪk.wə.t̬əs/",
+          "POS": "adj.",
+          "Definition": "無處不在的；普遍存在的",
+          "Example": "Smartphones have become ubiquitous in daily modern society.",
+          "ExampleTrans": "智慧型手機在現代日常社會中已變得無所不在。",
+          "Notes": "同義詞: pervasive",
+          "Label": "學術進階"
+        },
+        {
+          "Word": "streamline",
+          "Phonetic": "/ˈstriːm.laɪn/",
+          "POS": "v.",
+          "Definition": "簡化流程；精簡架構",
+          "Example": "We need to streamline our workflow to increase overall productivity.",
+          "ExampleTrans": "我們需要簡化工作流程以提升整體生產力。",
+          "Notes": "商務職場高頻",
+          "Label": "職場商務"
+        }
+      ];
+
+      const worksheet = XLSX.utils.json_to_sheet(sampleData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "單字題庫範本");
+
+      // Auto-fit column widths
+      worksheet['!cols'] = [
+        { wch: 15 }, // Word
+        { wch: 18 }, // Phonetic
+        { wch: 8 },  // POS
+        { wch: 30 }, // Definition
+        { wch: 45 }, // Example
+        { wch: 35 }, // ExampleTrans
+        { wch: 25 }, // Notes
+        { wch: 15 }, // Label
+      ];
+
+      XLSX.writeFile(workbook, "VocabFlip_單字本範本.xlsx");
+      showToast("範本檔案下載已開始", "ph-download-simple");
+    }
+
+    function escapeHtml(string) {
+      const div = document.createElement('div');
+      div.textContent = string;
+      return div.innerHTML;
+    }
+
+    let toastTimer = null;
+    function showToast(message, icon = "ph-info") {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMsg.textContent = message;
+      toastIcon.className = `ph-bold ${icon} text-indigo-400`;
+
+      clearTimeout(toastTimer);
+      toast.classList.remove('opacity-0', 'translate-y-20', 'pointer-events-none');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      toastTimer = setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-20', 'pointer-events-none');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 3000);
+    }
+
+    function openModal() {
+      uploadModal.classList.remove('opacity-0', 'pointer-events-none');
+      uploadModal.querySelector('div').classList.remove('scale-95');
+      uploadModal.querySelector('div').classList.add('scale-100');
+    }
+
+    function closeModal() {
+      uploadModal.classList.add('opacity-0', 'pointer-events-none');
+      uploadModal.querySelector('div').classList.add('scale-95');
+      uploadModal.querySelector('div').classList.remove('scale-100');
+    }
+
+    // Card interaction
+    flashcardArea.addEventListener('click', (e) => {
+      // Don't flip if user clicked speech button
+      if (e.target.closest('#btnPronounce')) return;
+      flipCard();
+    });
+
+    document.getElementById('btnFlip').addEventListener('click', () => flipCard());
+    document.getElementById('btnNext').addEventListener('click', () => nextCard());
+    document.getElementById('btnPrev').addEventListener('click', () => prevCard());
+    document.getElementById('btnMarkMastered').addEventListener('click', () => toggleMasteredCurrent());
+    document.getElementById('btnPronounce').addEventListener('click', (e) => {
+      e.stopPropagation();
+      speakCurrentWord();
+    });
+
+    document.getElementById('btnReshuffle').addEventListener('click', () => {
+      filterAndReshuffleDeck(true);
+      showToast("已重新以隨機亂數洗牌", "ph-shuffle");
+    });
+
+    // Tag Select All / Deselect All
+    document.getElementById('btnSelectAllTags').addEventListener('click', () => {
+      selectedLabels = new Set(availableLabels);
+      renderLabelFilterPills();
+      filterAndReshuffleDeck();
+    });
+
+    document.getElementById('btnDeselectAllTags').addEventListener('click', () => {
+      selectedLabels.clear();
+      renderLabelFilterPills();
+      filterAndReshuffleDeck();
+    });
+
+    document.getElementById('btnEmptySelectAll').addEventListener('click', () => {
+      selectedLabels = new Set(availableLabels);
+      renderLabelFilterPills();
+      filterAndReshuffleDeck();
+    });
+
+    // Completion Screen actions
+    document.getElementById('btnRestartAll').addEventListener('click', () => {
+      filterAndReshuffleDeck(false);
+    });
+
+    document.getElementById('btnReviewUnmastered').addEventListener('click', () => {
+      const unmastered = allVocabularyData.filter(item => 
+        selectedLabels.has(item.label) && !masteredWords.has(item.word)
+      );
+      if (unmastered.length === 0) {
+        showToast("全部單字都已標記為熟記！重置並重新開始練習", "ph-check-circle");
+        filterAndReshuffleDeck(false);
+        return;
+      }
+      currentDeck = shuffleArray(unmastered);
+      currentIndex = 0;
+      activeCountBadge.textContent = `${currentDeck.length} 個字 (未熟記)`;
+      updateCardView();
+    });
+
+    document.getElementById('btnChangeSettings').addEventListener('click', () => {
+      openModal();
+    });
+
+    // Modal interactions
+    document.getElementById('btnOpenUpload').addEventListener('click', openModal);
+    document.getElementById('btnCloseModal').addEventListener('click', closeModal);
+    document.getElementById('btnConfirmUpload').addEventListener('click', closeModal);
+    document.getElementById('btnDownloadTemplate').addEventListener('click', downloadSampleExcel);
+    
+    document.getElementById('btnLoadDemo').addEventListener('click', () => {
+      initializeVocabularySet(DEMO_VOCABULARY);
+      closeModal();
+      showToast("已載入內建高頻單字範例庫", "ph-sparkle");
+    });
+
+    sheetSelector.addEventListener('change', (e) => {
+      loadSheet(e.target.value);
+    });
+
+    // File Drag & Drop
+    excelFileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropzone.classList.add('border-indigo-500', 'bg-indigo-50/20');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-indigo-500', 'bg-indigo-50/20');
+      }, false);
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      if (dt && dt.files && dt.files[0]) {
+        handleFile(dt.files[0]);
+      }
+    });
+
+    // Keyboard Shortcuts Navigation
+    window.addEventListener('keydown', (e) => {
+      // Ignore if user is inside an input or modal is open
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !uploadModal.classList.contains('pointer-events-none')) {
+        return;
+      }
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        flipCard();
+      } else if (e.key === 'ArrowRight' || e.key === 'j' || e.key === 'J') {
+        e.preventDefault();
+        nextCard();
+      } else if (e.key === 'ArrowLeft' || e.key === 'k' || e.key === 'K') {
+        e.preventDefault();
+        prevCard();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        filterAndReshuffleDeck(true);
+        showToast("已隨機重新洗牌", "ph-shuffle");
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        toggleMasteredCurrent();
+      } else if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        speakCurrentWord();
+      }
+    });
+
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+
+    function applyTheme(isDark) {
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        themeIcon.className = 'ph ph-sun text-base text-amber-400';
+      } else {
+        document.documentElement.classList.remove('dark');
+        themeIcon.className = 'ph ph-moon text-base text-slate-600';
+      }
+    }
+
+    // Detect system preference or stored setting
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(prefersDark);
+
+    themeToggle.addEventListener('click', () => {
+      const isCurrentlyDark = document.documentElement.classList.contains('dark');
+      applyTheme(!isCurrentlyDark);
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initializeVocabularySet(DEMO_VOCABULARY);
+    });
+  </script>
+
+</body>
+</html>

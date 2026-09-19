@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VocabFlip - 自動載入 ./TestAdmit.xlsx 單字閃卡</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS (xlsx) for Excel processing -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Confetti library -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', '"Noto Sans TC"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    .perspective-1000 {
+      perspective: 1000px;
+    }
+    .transform-style-3d {
+      transform-style: preserve-3d;
+    }
+    .backface-hidden {
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .rotate-y-180 {
+      transform: rotateY(180deg);
+    }
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.4);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.7);
+    }
+  </style>
+</head>
+
+<body class="h-full bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 antialiased flex flex-col font-sans select-none transition-colors">
+
+  <header class="w-full border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md sticky top-0 z-30 transition-colors">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
+      <!-- App Brand Logo -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+          <i class="ph-bold ph-cards text-xl sm:text-2xl"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white">VocabFlip</h1>
+            <span id="fileSourceBadge" class="hidden sm:inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+              偵測中...
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">自動同步目錄單字庫 & 隨機不重複複習</p>
+        </div>
+      </div>
+
+      <!-- Action items -->
+      <div class="flex items-center gap-1.5 sm:gap-2.5">
+        <!-- Live Reload from ./TestAdmit.xlsx button -->
+        <button id="btnReloadFile" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition" title="重新讀取 ./TestAdmit.xlsx">
+          <i class="ph-bold ph-arrows-clockwise text-indigo-600 dark:text-indigo-400 text-sm"></i>
+          <span class="hidden sm:inline">重新讀取 Excel</span>
+        </button>
+
+        <button id="btnOpenSourceModal" class="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 transition" title="檔案設定與教學">
+          <i class="ph ph-gear text-sm sm:text-base"></i>
+          <span class="hidden md:inline">檔案設定</span>
+        </button>
+
+        <button id="btnDownloadTemplate" title="下載 TestAdmit.xlsx 格式範本" class="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-700 transition">
+          <i class="ph ph-download-simple text-base"></i>
+        </button>
+
+        <button id="themeToggle" class="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-700 transition" aria-label="切換深淺外觀">
+          <i id="themeIcon" class="ph ph-moon text-base"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 flex flex-col items-center justify-center">
+
+    <!-- Loading Screen State -->
+    <div id="loadingView" class="w-full max-w-md bg-white dark:bg-slate-800/90 rounded-3xl p-8 border border-slate-200 dark:border-slate-700 text-center shadow-lg">
+      <div class="w-12 h-12 mx-auto rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-2xl animate-spin mb-4">
+        <i class="ph-bold ph-spinner-gap"></i>
+      </div>
+      <h3 class="text-base font-bold text-slate-900 dark:text-white">正在嘗試讀取同目錄下的 TestAdmit.xlsx...</h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">請稍候，正在進行智慧欄位解析</p>
+    </div>
+
+    <!-- Active Study View -->
+    <div id="studyView" class="w-full max-w-3xl flex flex-col items-center hidden">
+      
+      <!-- Top Section Filter Container -->
+      <div class="w-full mb-4 bg-white dark:bg-slate-800/90 rounded-2xl p-4 border border-slate-200 dark:border-slate-700/80 shadow-sm transition-all">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-700/60">
+          <div class="flex items-center gap-2">
+            <i class="ph ph-tag text-indigo-600 dark:text-indigo-400 font-bold"></i>
+            <span class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200">題庫章節 / Labels 標籤選擇：</span>
+            <span id="activeCountBadge" class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium">0 個字</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <button id="btnSelectAllTags" class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">全選</button>
+            <span class="text-slate-300 dark:text-slate-600">|</span>
+            <button id="btnDeselectAllTags" class="text-slate-500 dark:text-slate-400 hover:underline">取消全選</button>
+          </div>
+        </div>
+
+        <!-- Sheet Selector (if multi-sheets exist in TestAdmit.xlsx) -->
+        <div id="sheetFilterRow" class="pt-3 pb-1 flex items-center gap-2 text-xs hidden">
+          <span class="text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">Excel 工作表：</span>
+          <select id="sheetSelectDropdown" class="bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs rounded-lg px-2.5 py-1 border-none focus:ring-1 focus:ring-indigo-500">
+            <!-- options inserted dynamically -->
+          </select>
+        </div>
+
+        <!-- Dynamic Label Capsule Buttons -->
+        <div id="tagFiltersContainer" class="flex flex-wrap gap-1.5 sm:gap-2 pt-3 max-h-24 overflow-y-auto">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+
+      <!-- Info Bar & Progress Track -->
+      <div class="w-full flex items-center justify-between mb-2.5 px-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+        <div class="flex items-center gap-3">
+          <span class="font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+            <i class="ph ph-stack text-indigo-600 dark:text-indigo-400"></i>
+            進度: <span id="progressText" class="font-bold text-slate-900 dark:text-white">0 / 0</span>
+          </span>
+          <span class="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+            <i class="ph-bold ph-check-circle"></i> 已熟記: <span id="masteredCount" class="font-bold">0</span>
+          </span>
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <button id="btnReshuffle" class="px-2.5 py-1 text-xs rounded-lg bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-700/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition flex items-center gap-1" title="以亂數隨機重新洗牌 (快速鍵 R)">
+            <i class="ph ph-shuffle"></i> 重新隨機
+          </button>
+        </div>
+      </div>
+
+      <!-- Linear progress bar -->
+      <div class="w-full bg-slate-200 dark:bg-slate-700/60 rounded-full h-1.5 sm:h-2 mb-4 overflow-hidden shadow-inner">
+        <div id="progressBar" class="bg-indigo-600 h-full rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+      </div>
+
+      <div class="w-full perspective-1000 min-h-[380px] sm:min-h-[420px] relative cursor-pointer group" id="flashcardArea" tabindex="0" role="button" aria-label="點擊翻面閃卡">
+        
+        <div id="cardInner" class="w-full h-full min-h-[380px] sm:min-h-[420px] rounded-3xl bg-transparent transition-transform duration-500 transform-style-3d relative shadow-lg">
+          
+          <!-- Card Front Face -->
+          <div class="absolute inset-0 w-full h-full bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700/80 p-6 sm:p-8 flex flex-col justify-between backface-hidden shadow-xl shadow-slate-200/50 dark:shadow-none hover:border-indigo-400/60 dark:hover:border-indigo-500/50 transition-colors">
+            <!-- Front Top -->
+            <div class="flex items-start justify-between">
+              <span id="cardFrontTag" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800/50">
+                標籤
+              </span>
+              <span class="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                <i class="ph ph-cursor-click"></i> 點擊或空白鍵翻面
+              </span>
+            </div>
+
+            <!-- Front Center (Word, Phonetic, Audio) -->
+            <div class="text-center my-auto py-4">
+              <div class="flex items-center justify-center gap-3">
+                <h2 id="cardWord" class="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                  Word
+                </h2>
+                <button id="btnPronounce" class="p-2.5 rounded-full text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition active:scale-95 shadow-sm" title="朗讀發音 (快速鍵 P)">
+                  <i class="ph-bold ph-speaker-high text-xl sm:text-2xl"></i>
+                </button>
+              </div>
+
+              <!-- Phonetics & POS -->
+              <div class="mt-3.5 flex items-center justify-center gap-2">
+                <span id="cardPhonetic" class="text-sm sm:text-base font-medium text-slate-500 dark:text-slate-400 font-mono">
+                  [phonetic]
+                </span>
+                <span id="cardPos" class="text-xs px-2 py-0.5 rounded-md font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 italic">
+                  pos
+                </span>
+              </div>
+            </div>
+
+            <!-- Front Bottom Tip -->
+            <div class="text-center pt-2">
+              <span class="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 font-medium">
+                <i class="ph ph-arrows-clockwise"></i> 翻至背面查看中文解釋與例句
+              </span>
+            </div>
+          </div>
+
+          <!-- Card Back Face -->
+          <div class="absolute inset-0 w-full h-full bg-slate-900 dark:bg-slate-950 text-white rounded-3xl border border-slate-700 p-6 sm:p-8 flex flex-col justify-between backface-hidden rotate-y-180 shadow-2xl">
+            <!-- Back Top -->
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-2">
+                <span id="cardBackWord" class="text-base font-bold text-indigo-300">Word</span>
+                <span id="cardBackPos" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 italic">pos</span>
+              </div>
+              <span class="text-xs text-slate-400 flex items-center gap-1">
+                <i class="ph ph-arrow-u-down-left"></i> 再點擊翻回正面
+              </span>
+            </div>
+
+            <!-- Back Center (Definition, Example, Notes) -->
+            <div class="my-auto py-2 space-y-3.5">
+              <div>
+                <p class="text-[11px] font-bold tracking-wider uppercase text-indigo-400 mb-1">中文釋義 (Definition)</p>
+                <p id="cardDefinition" class="text-xl sm:text-2xl font-bold text-white leading-snug">
+                  釋義
+                </p>
+              </div>
+
+              <!-- Example block -->
+              <div id="cardExampleContainer" class="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700/60">
+                <p class="text-xs font-semibold text-slate-400 mb-1 flex items-center gap-1">
+                  <i class="ph ph-quotes"></i> 例句 (Example)
+                </p>
+                <p id="cardExample" class="text-sm sm:text-base text-slate-200 italic leading-relaxed">
+                  "Example sentence"
+                </p>
+                <p id="cardExampleTrans" class="text-xs sm:text-sm text-slate-400 mt-1">
+                  例句翻譯
+                </p>
+              </div>
+
+              <!-- Notes block -->
+              <div id="cardNotesContainer" class="text-xs text-amber-300/90 flex items-start gap-1">
+                <i class="ph ph-info flex-shrink-0 mt-0.5"></i>
+                <span id="cardNotes">補充筆記</span>
+              </div>
+            </div>
+
+            <!-- Back Bottom -->
+            <div class="text-center text-xs text-slate-500">
+              VocabFlip · 來源: ./TestAdmit.xlsx
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Navigation Buttons -->
+      <div class="w-full mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <button id="btnPrev" class="px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-semibold text-sm transition flex items-center justify-center gap-2 shadow-sm active:scale-95 disabled:opacity-40 disabled:pointer-events-none">
+          <i class="ph-bold ph-arrow-left"></i> 上一張
+        </button>
+
+        <button id="btnFlip" class="px-4 py-3 rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-semibold text-sm transition flex items-center justify-center gap-2 shadow-sm active:scale-95">
+          <i class="ph-bold ph-arrows-clockwise"></i> 翻面 (空白鍵)
+        </button>
+
+        <button id="btnMarkMastered" class="px-4 py-3 rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 font-semibold text-sm transition flex items-center justify-center gap-2 shadow-sm active:scale-95">
+          <i class="ph-bold ph-check"></i> 標記已熟記
+        </button>
+
+        <button id="btnNext" class="px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 active:scale-95">
+          <span>下一張</span> <i class="ph-bold ph-arrow-right"></i>
+        </button>
+      </div>
+
+      <!-- Shortcuts Footer Legend -->
+      <div class="mt-4 flex flex-wrap items-center justify-center gap-3 text-[11px] sm:text-xs text-slate-400 dark:text-slate-500">
+        <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">Space</kbd> 翻轉</span>
+        <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">→</kbd> 或 <kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">J</kbd> 下一張</span>
+        <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">←</kbd> 或 <kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">K</kbd> 上一張</span>
+        <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">M</kbd> 熟記</span>
+        <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded font-mono text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700">P</kbd> 讀音</span>
+      </div>
+    </div>
+
+    <div id="fileMissingView" class="w-full max-w-xl bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700 shadow-xl hidden">
+      <div class="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-3xl mb-4">
+        <i class="ph-bold ph-warning-circle"></i>
+      </div>
+
+      <h2 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">未成功自動讀取 ./TestAdmit.xlsx</h2>
+      <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+        依照「解法二」的架構，網頁預設會自動讀取同目錄下的 <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 font-mono text-xs">TestAdmit.xlsx</code>。
+      </p>
+
+      <div class="mt-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/80 text-xs space-y-2.5">
+        <div class="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+          <i class="ph-bold ph-terminal-window text-indigo-500"></i> 如何讓它自動讀取？（任選一種）
+        </div>
+        <div class="text-slate-600 dark:text-slate-300 leading-relaxed">
+          <strong class="text-slate-800 dark:text-slate-100">方法 1：使用 Python（免安裝工具）</strong><br>
+          把 <code class="font-mono">index.html</code> 與你的 <code class="font-mono">TestAdmit.xlsx</code> 放在同一資料夾，在該資料夾打開終端機執行：
+          <div class="my-1.5 px-3 py-2 rounded-lg bg-slate-950 text-slate-200 font-mono text-[11px] select-text">
+            python -m http.server 8000
+          </div>
+          然後在瀏覽器打開 <span class="font-mono text-indigo-600 dark:text-indigo-400 font-semibold">http://localhost:8000</span> 即會自動讀取！
+        </div>
+        <div class="text-slate-600 dark:text-slate-300 leading-relaxed pt-1">
+          <strong class="text-slate-800 dark:text-slate-100">方法 2：VS Code 擴充套件</strong><br>
+          在 VS Code 安裝 <code class="font-mono text-indigo-500">Live Server</code>，在 <code class="font-mono">index.html</code> 上按右鍵選擇 <span class="text-slate-800 dark:text-slate-100 font-semibold">Open with Live Server</span>。
+        </div>
+      </div>
+
+      <!-- Fallback manual upload dropzone & retry buttons -->
+      <div class="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row items-center gap-3">
+        <button id="btnRetryFetch" class="w-full sm:w-auto flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20">
+          <i class="ph-bold ph-arrows-clockwise"></i> 重新嘗試讀取 ./TestAdmit.xlsx
+        </button>
+
+        <label for="fallbackFileInput" class="w-full sm:w-auto flex-1 py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-semibold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 cursor-pointer text-center">
+          <i class="ph-bold ph-folder-open"></i> 這次手動選擇檔案
+          <input id="fallbackFileInput" type="file" accept=".xlsx, .xls, .csv" class="hidden">
+        </label>
+      </div>
+
+      <div class="mt-3 text-center">
+        <button id="btnMissingDownloadTemplate" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium inline-flex items-center gap-1">
+          <i class="ph ph-download-simple"></i> 下載 TestAdmit.xlsx 格式範本並放到同資料夾
+        </button>
+      </div>
+    </div>
+
+    <!-- Completion View -->
+    <div id="completionView" class="w-full max-w-xl bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-700 shadow-2xl text-center hidden transition-all">
+      <div class="w-20 h-20 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-4xl mb-5 shadow-inner">
+        <i class="ph-fill ph-trophy"></i>
+      </div>
+
+      <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">太棒了！本輪單字已全數複習完畢 🎉</h2>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">已隨機無重複地瀏覽完所有已勾選章節的卡片：</p>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-3 gap-3 my-6">
+        <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
+          <p class="text-xs text-slate-400">複習總數</p>
+          <p id="statTotal" class="text-xl sm:text-2xl font-black text-slate-800 dark:text-white mt-1">0</p>
+        </div>
+        <div class="bg-emerald-50/80 dark:bg-emerald-950/30 p-4 rounded-2xl border border-emerald-200/50 dark:border-emerald-800/40">
+          <p class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">已熟記單字</p>
+          <p id="statMastered" class="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">0</p>
+        </div>
+        <div class="bg-indigo-50/80 dark:bg-indigo-950/30 p-4 rounded-2xl border border-indigo-200/50 dark:border-indigo-800/40">
+          <p class="text-xs text-indigo-600 dark:text-indigo-400 font-medium">熟記達成率</p>
+          <p id="statRate" class="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">0%</p>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3">
+        <button id="btnRestartAll" class="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2">
+          <i class="ph-bold ph-arrows-counter-clockwise"></i> 重新隨機洗牌
+        </button>
+        <button id="btnReviewUnmastered" class="flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
+          <i class="ph-bold ph-bookmarks"></i> 僅複習未熟記生字
+        </button>
+      </div>
+    </div>
+
+    <!-- Empty State (No tags active) -->
+    <div id="emptyView" class="w-full max-w-md bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-200 dark:border-slate-700 text-center hidden">
+      <div class="w-16 h-16 mx-auto rounded-full bg-indigo-50 dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-3xl mb-4">
+        <i class="ph ph-funnel"></i>
+      </div>
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white">未選取任何標籤章節</h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 mb-6">請在上方點選至少一個章節/標籤，以展開單字卡進行練習。</p>
+      <button id="btnEmptySelectAll" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition">
+        全選所有標籤
+      </button>
+    </div>
+
+  </main>
+
+  <div id="settingsModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="w-full max-w-lg bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700 shadow-2xl transform scale-95 transition-transform duration-200 max-h-[90vh] overflow-y-auto">
+      
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+            <i class="ph-bold ph-microsoft-excel-logo text-lg"></i>
+          </div>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-white">檔案來源與設定</h3>
+        </div>
+        <button id="btnCloseSettingsModal" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+          <i class="ph-bold ph-x text-lg"></i>
+        </button>
+      </div>
+
+      <div class="mt-4 space-y-4">
+        <div class="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 text-xs">
+          <p class="font-bold text-indigo-900 dark:text-indigo-300 mb-1">💡 實踐「解法二」全自動讀取：</p>
+          <p class="text-indigo-700 dark:text-indigo-300/80 leading-relaxed">
+            只要把 Excel 命名為 <code class="font-mono font-bold bg-white dark:bg-slate-900 px-1 py-0.5 rounded">TestAdmit.xlsx</code> 與本網頁放在同一資料夾，並透過 Live Server 或 Python 啟動伺服器，往後<strong>每次在電腦中修改完 Excel 並儲存，網頁點擊「重新讀取」或重新整理就會直接載入最新單字！</strong>
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-2">手動上傳覆蓋（隨時可換檔案）：</label>
+          <label for="modalFileInput" class="border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition bg-slate-50/50 dark:bg-slate-900/40">
+            <i class="ph ph-upload-simple text-2xl text-indigo-500 mb-1"></i>
+            <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">點擊選擇本機 Excel 檔案</span>
+            <span class="text-[11px] text-slate-400 mt-0.5">支援 .xlsx, .xls, .csv</span>
+            <input id="modalFileInput" type="file" accept=".xlsx, .xls, .csv" class="hidden">
+          </label>
+        </div>
+
+        <div class="bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/80 text-xs">
+          <h4 class="font-bold text-slate-700 dark:text-slate-200 mb-1.5 flex items-center gap-1">
+            <i class="ph ph-magic-wand text-indigo-500"></i> Excel 欄位自動辨識規則：
+          </h4>
+          <p class="text-slate-500 dark:text-slate-400 leading-relaxed">
+            英文欄位：Word / Vocabulary / 單字<br>
+            中文欄位：Definition / Meaning / 釋義 / 意思<br>
+            音標：Phonetic / KK / 音標<br>
+            分類標籤：Label / Tag / Category / 章節
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-5 flex items-center justify-between gap-2">
+        <button id="btnModalDownloadTemplate" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold flex items-center gap-1">
+          <i class="ph ph-download-simple"></i> 下載 TestAdmit.xlsx 範本檔
+        </button>
+        <button id="btnModalCloseDone" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs transition">
+          完成
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification element -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 text-xs sm:text-sm font-medium">
+    <i id="toastIcon" class="ph-bold ph-info text-indigo-400"></i>
+    <span id="toastMsg">提示訊息</span>
+  </div>
+
+  <script>
+    // State management
+    let rawWorkbook = null;
+    let allVocabularyData = [];          // Master parsed list
+    let availableLabels = [];             // Unique list of sections/labels
+    let selectedLabels = new Set();       // Currently checked labels
+    let currentDeck = [];                 // Filtered and shuffled cards for session
+    let currentIndex = 0;                 // Current card index pointer
+    let isFlipped = false;                // 3D Flip state
+    let masteredWords = new Set();        // Set of words marked as mastered
+
+    // DOM Element handles
+    const loadingView = document.getElementById('loadingView');
+    const studyView = document.getElementById('studyView');
+    const completionView = document.getElementById('completionView');
+    const emptyView = document.getElementById('emptyView');
+    const fileMissingView = document.getElementById('fileMissingView');
+    const fileSourceBadge = document.getElementById('fileSourceBadge');
+
+    const flashcardArea = document.getElementById('flashcardArea');
+    const cardInner = document.getElementById('cardInner');
+    const cardWord = document.getElementById('cardWord');
+    const cardPhonetic = document.getElementById('cardPhonetic');
+    const cardPos = document.getElementById('cardPos');
+    const cardFrontTag = document.getElementById('cardFrontTag');
+    const cardBackWord = document.getElementById('cardBackWord');
+    const cardBackPos = document.getElementById('cardBackPos');
+    const cardDefinition = document.getElementById('cardDefinition');
+    const cardExample = document.getElementById('cardExample');
+    const cardExampleTrans = document.getElementById('cardExampleTrans');
+    const cardNotes = document.getElementById('cardNotes');
+    const cardNotesContainer = document.getElementById('cardNotesContainer');
+    
+    const progressText = document.getElementById('progressText');
+    const progressBar = document.getElementById('progressBar');
+    const masteredCountElem = document.getElementById('masteredCount');
+    const tagFiltersContainer = document.getElementById('tagFiltersContainer');
+    const activeCountBadge = document.getElementById('activeCountBadge');
+    const sheetFilterRow = document.getElementById('sheetFilterRow');
+    const sheetSelectDropdown = document.getElementById('sheetSelectDropdown');
+
+    const settingsModal = document.getElementById('settingsModal');
+
+    /**
+     * Fisher-Yates (Knuth) Non-repeating Shuffle Algorithm
+     * Guarantees an unbiased permutation with O(N) complexity
+     */
+    function shuffleArray(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function findColumnKey(row, aliases) {
+      const keys = Object.keys(row);
+      for (const alias of aliases) {
+        const found = keys.find(k => k.trim().toLowerCase() === alias.toLowerCase());
+        if (found) return found;
+      }
+      for (const alias of aliases) {
+        const found = keys.find(k => k.trim().toLowerCase().includes(alias.toLowerCase()));
+        if (found) return found;
+      }
+      return null;
+    }
+
+    function parseExcelRows(rawRows, sheetName = "") {
+      if (!rawRows || rawRows.length === 0) return [];
+      
+      const sample = rawRows[0];
+      const wordKey = findColumnKey(sample, ["word", "vocabulary", "term", "單字", "英文", "words"]);
+      const defKey = findColumnKey(sample, ["definition", "meaning", "chinese", "釋義", "解釋", "意思", "中文"]);
+      const phoneticKey = findColumnKey(sample, ["phonetic", "kk", "音標", "pronunciation", "ipa"]);
+      const posKey = findColumnKey(sample, ["pos", "part of speech", "詞性", "type"]);
+      const exampleKey = findColumnKey(sample, ["example", "sentence", "例句", "sentences"]);
+      const exTransKey = findColumnKey(sample, ["exampletrans", "translation", "例句翻譯", "例句中文", "trans"]);
+      const notesKey = findColumnKey(sample, ["notes", "note", "備註", "筆記", "remark"]);
+      const labelKey = findColumnKey(sample, ["label", "tag", "category", "section", "標籤", "分類", "章節", "組別"]);
+
+      const parsed = [];
+
+      rawRows.forEach((row, idx) => {
+        const wordVal = wordKey && row[wordKey] ? String(row[wordKey]).trim() : "";
+        if (!wordVal) return; // Skip empty rows
+
+        const defVal = defKey && row[defKey] ? String(row[defKey]).trim() : "（無中文釋義）";
+        const phoneticVal = phoneticKey && row[phoneticKey] ? String(row[phoneticKey]).trim() : "";
+        const posVal = posKey && row[posKey] ? String(row[posKey]).trim() : "";
+        const exampleVal = exampleKey && row[exampleKey] ? String(row[exampleKey]).trim() : "";
+        const exTransVal = exTransKey && row[exTransKey] ? String(row[exTransKey]).trim() : "";
+        const notesVal = notesKey && row[notesKey] ? String(row[notesKey]).trim() : "";
+        
+        let labelVal = labelKey && row[labelKey] ? String(row[labelKey]).trim() : "";
+        if (!labelVal) {
+          labelVal = sheetName || "一般單字";
+        }
+
+        parsed.push({
+          id: idx + 1,
+          word: wordVal,
+          definition: defVal,
+          phonetic: phoneticVal,
+          pos: posVal,
+          example: exampleVal,
+          exampleTrans: exTransVal,
+          notes: notesVal,
+          label: labelVal
+        });
+      });
+
+      return parsed;
+    }
+
+    async function autoFetchLocalExcel() {
+      // Show loading
+      loadingView.classList.remove('hidden');
+      studyView.classList.add('hidden');
+      completionView.classList.add('hidden');
+      emptyView.classList.add('hidden');
+      fileMissingView.classList.add('hidden');
+
+      // Update badge to checking
+      updateFileBadge("偵測中...", "amber");
+
+      try {
+        // Cache-busting timestamp ensures changes in TestAdmit.xlsx are instantly retrieved
+        const cacheBusterUrl = `./TestAdmit.xlsx?t=${Date.now()}`;
+        const response = await fetch(cacheBusterUrl);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        rawWorkbook = workbook;
+
+        if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+          throw new Error("Excel 內沒有任何工作表");
+        }
+
+        setupSheetDropdown(workbook.SheetNames);
+        loadWorkbookSheet(workbook.SheetNames[0]);
+
+        updateFileBadge("已自動同步 ./TestAdmit.xlsx", "emerald");
+        showToast("已成功自動載入同目錄 TestAdmit.xlsx！", "ph-check-circle");
+
+      } catch (error) {
+        console.warn("Auto-fetch ./TestAdmit.xlsx failed:", error);
+        loadingView.classList.add('hidden');
+        fileMissingView.classList.remove('hidden');
+        updateFileBadge("未偵測到 ./TestAdmit.xlsx", "rose");
+      }
+    }
+
+    function updateFileBadge(text, color) {
+      fileSourceBadge.className = `hidden sm:inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-medium transition-all ${
+        color === 'emerald' 
+          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800' 
+          : color === 'rose'
+          ? 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800'
+          : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+      }`;
+      const dotColor = color === 'emerald' ? 'bg-emerald-500' : color === 'rose' ? 'bg-rose-500' : 'bg-amber-500';
+      fileSourceBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${dotColor}"></span>${text}`;
+    }
+
+    function setupSheetDropdown(sheetNames) {
+      sheetSelectDropdown.innerHTML = '';
+      if (sheetNames.length > 1) {
+        sheetNames.forEach(name => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          sheetSelectDropdown.appendChild(opt);
+        });
+        sheetFilterRow.classList.remove('hidden');
+      } else {
+        sheetFilterRow.classList.add('hidden');
+      }
+    }
+
+    function loadWorkbookSheet(sheetName) {
+      if (!rawWorkbook || !rawWorkbook.Sheets[sheetName]) return;
+      const worksheet = rawWorkbook.Sheets[sheetName];
+      const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+      if (jsonRows.length === 0) {
+        showToast(`工作表 "${sheetName}" 無資料`, "ph-warning");
+        return;
+      }
+
+      const parsed = parseExcelRows(jsonRows, sheetName);
+      if (parsed.length === 0) {
+        showToast("未能解析出單字資料，請檢查 Excel 標題欄位", "ph-warning");
+        return;
+      }
+
+      initializeVocabularySet(parsed);
+      loadingView.classList.add('hidden');
+      fileMissingView.classList.add('hidden');
+    }
+
+    function initializeVocabularySet(vocabularyList) {
+      allVocabularyData = vocabularyList;
+      
+      const uniqueLabels = Array.from(new Set(vocabularyList.map(v => v.label || "一般單字")));
+      availableLabels = uniqueLabels;
+      selectedLabels = new Set(uniqueLabels); // default all checked
+
+      renderLabelFilterPills();
+      filterAndReshuffleDeck(false);
+    }
+
+    function renderLabelFilterPills() {
+      tagFiltersContainer.innerHTML = '';
+      
+      const counts = {};
+      allVocabularyData.forEach(item => {
+        counts[item.label] = (counts[item.label] || 0) + 1;
+      });
+
+      availableLabels.forEach(label => {
+        const isSelected = selectedLabels.has(label);
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = `px-3 py-1.5 rounded-full text-xs font-medium transition flex items-center gap-1.5 border ${
+          isSelected 
+            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+        }`;
+        
+        pill.innerHTML = `
+          <span>${escapeHtml(label)}</span>
+          <span class="text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'}">${counts[label] || 0}</span>
+        `;
+
+        pill.addEventListener('click', () => {
+          if (selectedLabels.has(label)) {
+            selectedLabels.delete(label);
+          } else {
+            selectedLabels.add(label);
+          }
+          renderLabelFilterPills();
+          filterAndReshuffleDeck();
+        });
+
+        tagFiltersContainer.appendChild(pill);
+      });
+    }
+
+    function filterAndReshuffleDeck(keepMastered = true) {
+      if (!keepMastered) {
+        masteredWords.clear();
+      }
+
+      const filtered = allVocabularyData.filter(item => selectedLabels.has(item.label));
+
+      // Execute Fisher-Yates non-repeating shuffle
+      currentDeck = shuffleArray(filtered);
+      currentIndex = 0;
+
+      activeCountBadge.textContent = `${filtered.length} 個字`;
+      updateCardView();
+    }
+
+    function updateCardView() {
+      if (currentDeck.length === 0) {
+        studyView.classList.add('hidden');
+        completionView.classList.add('hidden');
+        emptyView.classList.remove('hidden');
+        return;
+      }
+
+      studyView.classList.remove('hidden');
+      completionView.classList.add('hidden');
+      emptyView.classList.add('hidden');
+
+      const card = currentDeck[currentIndex];
+
+      // Always reset back to front on card change
+      if (isFlipped) {
+        flipCard(false);
+      }
+
+      // Front Face
+      cardWord.textContent = card.word;
+      cardPhonetic.textContent = card.phonetic || "";
+      cardPhonetic.style.display = card.phonetic ? "inline-block" : "none";
+      cardPos.textContent = card.pos || "";
+      cardPos.style.display = card.pos ? "inline-block" : "none";
+      cardFrontTag.textContent = card.label || "一般";
+
+      // Back Face
+      cardBackWord.textContent = card.word;
+      cardBackPos.textContent = card.pos || "";
+      cardBackPos.style.display = card.pos ? "inline-block" : "none";
+      cardDefinition.textContent = card.definition;
+      
+      const exContainer = document.getElementById('cardExampleContainer');
+      if (card.example) {
+        exContainer.classList.remove('hidden');
+        cardExample.textContent = `"${card.example}"`;
+        cardExampleTrans.textContent = card.exampleTrans || "";
+        cardExampleTrans.style.display = card.exampleTrans ? "block" : "none";
+      } else {
+        exContainer.classList.add('hidden');
+      }
+
+      if (card.notes) {
+        cardNotesContainer.classList.remove('hidden');
+        cardNotes.textContent = card.notes;
+      } else {
+        cardNotesContainer.classList.add('hidden');
+      }
+
+      // Progress & Mastered State
+      const currentNumber = currentIndex + 1;
+      const total = currentDeck.length;
+      progressText.textContent = `${currentNumber} / ${total}`;
+      const percentage = Math.round((currentNumber / total) * 100);
+      progressBar.style.width = `${percentage}%`;
+      masteredCountElem.textContent = masteredWords.size;
+
+      const btnMastered = document.getElementById('btnMarkMastered');
+      if (masteredWords.has(card.word)) {
+        btnMastered.innerHTML = `<i class="ph-fill ph-check-circle text-emerald-600"></i> 已熟記`;
+        btnMastered.classList.add('ring-2', 'ring-emerald-400');
+      } else {
+        btnMastered.innerHTML = `<i class="ph-bold ph-check"></i> 標記已熟記`;
+        btnMastered.classList.remove('ring-2', 'ring-emerald-400');
+      }
+
+      document.getElementById('btnPrev').disabled = (currentIndex === 0);
+    }
+
+    function flipCard(forceState = null) {
+      if (forceState !== null) {
+        isFlipped = forceState;
+      } else {
+        isFlipped = !isFlipped;
+      }
+
+      if (isFlipped) {
+        cardInner.classList.add('rotate-y-180');
+      } else {
+        cardInner.classList.remove('rotate-y-180');
+      }
+    }
+
+    function nextCard() {
+      if (currentIndex < currentDeck.length - 1) {
+        currentIndex++;
+        updateCardView();
+      } else {
+        showCompletionScreen();
+      }
+    }
+
+    function prevCard() {
+      if (currentIndex > 0) {
+        currentIndex--;
+        updateCardView();
+      }
+    }
+
+    function toggleMasteredCurrent() {
+      if (currentDeck.length === 0 || !currentDeck[currentIndex]) return;
+      const currentWord = currentDeck[currentIndex].word;
+      if (masteredWords.has(currentWord)) {
+        masteredWords.delete(currentWord);
+        showToast(`已取消熟記: ${currentWord}`, "ph-minus-circle");
+      } else {
+        masteredWords.add(currentWord);
+        showToast(`已標記為熟記: ${currentWord}`, "ph-check-circle");
+      }
+      updateCardView();
+    }
+
+    function speakCurrentWord() {
+      if (currentDeck.length === 0 || !currentDeck[currentIndex]) return;
+      const word = currentDeck[currentIndex].word;
+      if (!('speechSynthesis' in window)) {
+        showToast("您的瀏覽器不支援語音發音", "ph-warning");
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function showCompletionScreen() {
+      studyView.classList.add('hidden');
+      emptyView.classList.add('hidden');
+      completionView.classList.remove('hidden');
+
+      const total = currentDeck.length;
+      const mastered = currentDeck.filter(c => masteredWords.has(c.word)).length;
+      const rate = total > 0 ? Math.round((mastered / total) * 100) : 0;
+
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statMastered').textContent = mastered;
+      document.getElementById('statRate').textContent = `${rate}%`;
+
+      if (typeof confetti === 'function') {
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+      }
+    }
+
+    function handleManualFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          rawWorkbook = workbook;
+          setupSheetDropdown(workbook.SheetNames);
+          loadWorkbookSheet(workbook.SheetNames[0]);
+          updateFileBadge(`手動: ${file.name}`, "emerald");
+          closeSettingsModal();
+          showToast(`已載入檔案: ${file.name}`, "ph-check-circle");
+        } catch (err) {
+          console.error(err);
+          showToast("解析 Excel 失敗，請確認檔案格式", "ph-warning");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function downloadSampleExcel() {
+      const sampleData = [
+        {
+          "Word": "serendipity",
+          "Phonetic": "/ˌser.ənˈdɪp.ə.t̬i/",
+          "POS": "n.",
+          "Definition": "意外發現美好事物的機緣；意外收穫",
+          "Example": "Finding my dream job while on vacation was pure serendipity.",
+          "ExampleTrans": "在度假時找到夢想工作純屬偶然的驚喜機緣。",
+          "Notes": "托福 / 雅思常見優雅名詞",
+          "Label": "日常美語"
+        },
+        {
+          "Word": "resilience",
+          "Phonetic": "/rɪˈzɪl.jəns/",
+          "POS": "n.",
+          "Definition": "恢復力；彈性；挫折復原力",
+          "Example": "The team showed great resilience after the severe setback.",
+          "ExampleTrans": "團隊在經歷重大挫折後展現出極強的復原能力。",
+          "Notes": "商務管理與心理學必備",
+          "Label": "職場商務"
+        },
+        {
+          "Word": "ubiquitous",
+          "Phonetic": "/juːˈbɪk.wə.t̬əs/",
+          "POS": "adj.",
+          "Definition": "無處不在的；普遍存在的",
+          "Example": "Smartphones have become ubiquitous in daily modern society.",
+          "ExampleTrans": "智慧型手機在現代日常社會中已變得無所不在。",
+          "Notes": "同義詞: pervasive",
+          "Label": "學術進階"
+        },
+        {
+          "Word": "streamline",
+          "Phonetic": "/ˈstriːm.laɪn/",
+          "POS": "v.",
+          "Definition": "使簡化；簡化工作流程",
+          "Example": "We need to streamline our workflow to increase overall productivity.",
+          "ExampleTrans": "我們需要簡化工作流程以提升整體生產力。",
+          "Notes": "多益職場商用高頻詞",
+          "Label": "職場商務"
+        }
+      ];
+
+      const worksheet = XLSX.utils.json_to_sheet(sampleData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "單字題庫");
+
+      worksheet['!cols'] = [
+        { wch: 15 }, // Word
+        { wch: 18 }, // Phonetic
+        { wch: 8 },  // POS
+        { wch: 30 }, // Definition
+        { wch: 45 }, // Example
+        { wch: 35 }, // ExampleTrans
+        { wch: 20 }, // Notes
+        { wch: 15 }, // Label
+      ];
+
+      XLSX.writeFile(workbook, "TestAdmit.xlsx");
+      showToast("已下載 TestAdmit.xlsx 範本檔，請放置於網頁同目錄！", "ph-download-simple");
+    }
+
+    // Modal controls
+    function openSettingsModal() {
+      settingsModal.classList.remove('opacity-0', 'pointer-events-none');
+      settingsModal.querySelector('div').classList.remove('scale-95');
+      settingsModal.querySelector('div').classList.add('scale-100');
+    }
+    function closeSettingsModal() {
+      settingsModal.classList.add('opacity-0', 'pointer-events-none');
+      settingsModal.querySelector('div').classList.add('scale-95');
+      settingsModal.querySelector('div').classList.remove('scale-100');
+    }
+
+    function escapeHtml(string) {
+      const div = document.createElement('div');
+      div.textContent = string;
+      return div.innerHTML;
+    }
+
+    let toastTimer = null;
+    function showToast(message, icon = "ph-info") {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMsg.textContent = message;
+      toastIcon.className = `ph-bold ${icon} text-indigo-400`;
+
+      clearTimeout(toastTimer);
+      toast.classList.remove('opacity-0', 'translate-y-20', 'pointer-events-none');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      toastTimer = setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-20', 'pointer-events-none');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 3200);
+    }
+
+    flashcardArea.addEventListener('click', (e) => {
+      if (e.target.closest('#btnPronounce')) return;
+      flipCard();
+    });
+
+    document.getElementById('btnFlip').addEventListener('click', () => flipCard());
+    document.getElementById('btnNext').addEventListener('click', () => nextCard());
+    document.getElementById('btnPrev').addEventListener('click', () => prevCard());
+    document.getElementById('btnMarkMastered').addEventListener('click', () => toggleMasteredCurrent());
+    document.getElementById('btnPronounce').addEventListener('click', (e) => {
+      e.stopPropagation();
+      speakCurrentWord();
+    });
+
+    document.getElementById('btnReshuffle').addEventListener('click', () => {
+      filterAndReshuffleDeck(true);
+      showToast("已重新以隨機亂數洗牌", "ph-shuffle");
+    });
+
+    document.getElementById('btnSelectAllTags').addEventListener('click', () => {
+      selectedLabels = new Set(availableLabels);
+      renderLabelFilterPills();
+      filterAndReshuffleDeck();
+    });
+
+    document.getElementById('btnDeselectAllTags').addEventListener('click', () => {
+      selectedLabels.clear();
+      renderLabelFilterPills();
+      filterAndReshuffleDeck();
+    });
+
+    document.getElementById('btnEmptySelectAll').addEventListener('click', () => {
+      selectedLabels = new Set(availableLabels);
+      renderLabelFilterPills();
+      filterAndReshuffleDeck();
+    });
+
+    document.getElementById('btnRestartAll').addEventListener('click', () => {
+      filterAndReshuffleDeck(false);
+    });
+
+    document.getElementById('btnReviewUnmastered').addEventListener('click', () => {
+      const unmastered = allVocabularyData.filter(item => 
+        selectedLabels.has(item.label) && !masteredWords.has(item.word)
+      );
+      if (unmastered.length === 0) {
+        showToast("全部單字都已熟記！重新開始完整練習", "ph-check-circle");
+        filterAndReshuffleDeck(false);
+        return;
+      }
+      currentDeck = shuffleArray(unmastered);
+      currentIndex = 0;
+      activeCountBadge.textContent = `${currentDeck.length} 個字 (未熟記)`;
+      updateCardView();
+    });
+
+    // Auto reload button from top bar
+    document.getElementById('btnReloadFile').addEventListener('click', () => {
+      autoFetchLocalExcel();
+    });
+
+    // Retry fetch button from missing view
+    document.getElementById('btnRetryFetch').addEventListener('click', () => {
+      autoFetchLocalExcel();
+    });
+
+    // Fallback file input handlers
+    document.getElementById('fallbackFileInput').addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleManualFile(e.target.files[0]);
+      }
+    });
+
+    document.getElementById('modalFileInput').addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleManualFile(e.target.files[0]);
+      }
+    });
+
+    // Sheet dropdown listener
+    sheetSelectDropdown.addEventListener('change', (e) => {
+      loadWorkbookSheet(e.target.value);
+    });
+
+    // Template download buttons
+    document.getElementById('btnDownloadTemplate').addEventListener('click', downloadSampleExcel);
+    document.getElementById('btnMissingDownloadTemplate').addEventListener('click', downloadSampleExcel);
+    document.getElementById('btnModalDownloadTemplate').addEventListener('click', downloadSampleExcel);
+
+    // Modal controls
+    document.getElementById('btnOpenSourceModal').addEventListener('click', openSettingsModal);
+    document.getElementById('btnCloseSettingsModal').addEventListener('click', closeSettingsModal);
+    document.getElementById('btnModalCloseDone').addEventListener('click', closeSettingsModal);
+
+    // Keyboard navigation
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || !settingsModal.classList.contains('pointer-events-none')) {
+        return;
+      }
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        flipCard();
+      } else if (e.key === 'ArrowRight' || e.key === 'j' || e.key === 'J') {
+        e.preventDefault();
+        nextCard();
+      } else if (e.key === 'ArrowLeft' || e.key === 'k' || e.key === 'K') {
+        e.preventDefault();
+        prevCard();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        filterAndReshuffleDeck(true);
+        showToast("已隨機重新洗牌", "ph-shuffle");
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        toggleMasteredCurrent();
+      } else if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        speakCurrentWord();
+      }
+    });
+
+    // Theme toggle
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+    function applyTheme(isDark) {
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        themeIcon.className = 'ph ph-sun text-base text-amber-400';
+      } else {
+        document.documentElement.classList.remove('dark');
+        themeIcon.className = 'ph ph-moon text-base text-slate-600';
+      }
+    }
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(prefersDark);
+    themeToggle.addEventListener('click', () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      applyTheme(!isDark);
+    });
+
+    // Trigger auto-fetch on launch
+    window.addEventListener('DOMContentLoaded', () => {
+      autoFetchLocalExcel();
+    });
+  </script>
+</body>
+</html>
